@@ -28,8 +28,6 @@ class STDecoder(nn.Module):
         self.num_layers = len(self.depths)
         self.latent_ch = cfg.latent_channel
 
-        self.norm_pix_loss = cfg.norm_pix_loss
-
         self.latent_head_inverse = nn.Conv2d(
             in_channels=self.latent_ch,
             out_channels=self.st_dim,
@@ -64,18 +62,6 @@ class STDecoder(nn.Module):
         )
 
         self.apply(init_weights)
-
-    def decoder_loss(self, target, mask, pred):
-        if self.norm_pix_loss:
-            mean = target.mean(dim=-1, keepdim=True)
-            var = target.var(dim=-1, keepdim=True)
-            target = (target - mean) / (var + 1.e-6) ** .5
-
-        loss = (pred - target) ** 2
-        # loss = loss.mean(dim=-1)  # [N, L], mean loss per patch
-        loss = (loss * mask).sum() / mask.sum()  # mean loss on removed patches
-
-        return loss
 
     def forward(self, latent_wav):
         x = reshape_wav2img(latent_wav, self.freq_ratio)

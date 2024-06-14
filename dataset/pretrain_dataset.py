@@ -12,6 +12,8 @@ class PretrainDataset(Dataset):
         self.wav_files = []
         for _dir in root_dirs:
             for wav in os.listdir(_dir):
+                if not wav.endswith('wav'):
+                    continue
                 wav_path = os.path.join(_dir, wav)
                 self.wav_files.append(wav_path)
 

@@ -38,6 +38,18 @@ def prepare_environment(cfg):
     logger.info(f'workspace: {cfg.workspace}')
 
 
+def forward_loss(target, mask, pred, norm_pix_loss):
+    if norm_pix_loss:
+        mean = target.mean(dim=-1, keepdim=True)
+        var = target.var(dim=-1, keepdim=True)
+        target = (target - mean) / (var + 1.e-6) ** .5
+
+    loss = (pred - target) ** 2
+    # loss = loss.mean(dim=-1)  # [N, L], mean loss per patch
+    loss = (loss * mask).sum() / mask.sum()  # mean loss on removed patches
+
+    return loss
+
 # ckpt: https://www.cnblogs.com/booturbo/p/17358917.html
 def train(cfg: AMAEConfig, ddp=False):
     def _lr_foo(_epoch):
@@ -92,9 +104,9 @@ def train(cfg: AMAEConfig, ddp=False):
     model_E = STEncoder(cfg)
     model_D = STDecoder(cfg)
     if ddp:
-        model_E = torch.nn.SyncBatchNorm.convert_sync_batchnorm(model_E)
+        model_E = torch.nn.SyncBatchNorm.convert_sync_batchnorm(model_E.cuda())
         model_E = nn.parallel.DistributedDataParallel(model_E, device_ids=[gpu])
-        model_D = torch.nn.SyncBatchNorm.convert_sync_batchnorm(model_D)
+        model_D = torch.nn.SyncBatchNorm.convert_sync_batchnorm(model_D.cuda())
         model_D = nn.parallel.DistributedDataParallel(model_D, device_ids=[gpu])
     else:
         model_E = model_E.to(device)
@@ -142,10 +154,11 @@ def train(cfg: AMAEConfig, ddp=False):
             batch = batch.cuda() if ddp else batch.to(device)
             encoder_output = model_E(batch)
             decoder_output = model_D(encoder_output['latent'])
-            loss = model_D.decoder_loss(
+            loss = forward_loss(
                 target=encoder_output['ori_fband'],
                 mask=encoder_output['mask'],
-                pred=decoder_output
+                pred=decoder_output,
+                norm_pix_loss=cfg.norm_pix_loss,
             )
 
             loss.backward()
@@ -193,8 +206,7 @@ def main():
     train(cfg, ddp)
 
 
-# ddp: torchrun --nnodes=1 --node_rank=0 --nproc_per_node=2 --master_addr="192.168.1.140" --master_port=23456 \
-# pretrain.py --cfg_path E:\windows\project\python\Audio_MAE_Base_ST\config\pretrain.yaml
-# normal: python pretrain.py --cfg_path E:\windows\project\python\Audio_MAE_Base_ST\config\pretrain.yaml
+# ddp: OMP_NUM_THREADS=8 torchrun --nnodes=1 --node_rank=0 --nproc_per_node=2 --master_addr="192.168.1.250" --master_port=23456 pretrain.py --cfg_path /home/tlzn/users/zlqiu/project/Audio_MAE_Base_ST/config/pretrain.yaml
+# normal: python pretrain.py --cfg_path /home/tlzn/users/zlqiu/project/Audio_MAE_Base_ST/config/pretrain.yaml
 if __name__ == '__main__':
     main()

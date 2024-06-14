@@ -86,7 +86,7 @@ class PatchEmbedInverse(nn.Module):
     def forward(self, x, H, W):
         x = self.norm(x)
         B, _, C = x.shape
-        x = x.transpose(1, 2).reshape(B, C, H, W)
+        x = x.transpose(1, 2).contiguous().reshape(B, C, H, W)
         x = self.proj(x)
         return x
 
