@@ -1,0 +1,76 @@
+# audio/Fband config
+audio_len: 10  # s
+sample_rate: 32000
+n_fft: 1024  # also configure stft window size 
+hop_size: 320
+mel_bins: 64
+f_min: 50
+
+# model config
+spec_size: 256
+patch_size: 4
+embed_dim: 96
+window_size: 8
+latent_channel: 32  # grid
+extra_downsample_ratio: 1  # for long audio
+num_classes: 0
+absolute_position_embedding: False
+
+EC_mlp_ratio: 4
+EC_num_head: [ 4, 8, 16, 32 ]
+EC_depth: [ 2, 2, 6, 2 ]
+EC_attn_norm: True
+EC_patch_norm: True
+EC_qkv_bias: True
+EC_drop_rate: 0.
+EC_attn_drop_rate: 0.
+EC_drop_path_rate: 0.1
+
+DC_num_head: [32, 16, 8, 4]
+DC_depth: [2, 6, 2, 2]
+DC_mlp_ratio: 4.
+DC_drop_rate: 0.
+DC_attn_drop_rate: 0.
+DC_drop_path_rate: 0.1
+DC_attn_norm: True
+DC_patch_norm: True
+DC_qkv_bias: True
+
+# training config
+pre_training: True
+batch_size: 64
+learning_rate: 0.001  # 1e-4 also workable
+max_epoch: 200
+lr_scheduler: [ 0.02, 0.05, 0.1 ]
+lr_scheduler_epoch: [ 10, 20, 30 ]
+mask_ratio: 0.6  # grid
+norm_pix_loss: True  # grid
+restore_mask_only: True  # grid
+
+# paths
+data_dir:
+  win: E:\common\dataset\audio\audio_set\balanced_train_segments
+  linux: datas/test
+encoder_ckpt:
+  win: E:\project\python\auto_encoder\workspace\st_model.pth
+  linux: ckpt/pretrained/hts_at/HTSAT_ESC_exp=1_fold=1_acc=0.985.pth
+decoder_ckpt:
+  win: E:\project\python\auto_encoder\workspace\st_classifier.pth
+  linux: ckpt/pretrained/hts_at/HTSAT_ESC_exp=1_fold=1_acc=0.985.pth
+workspace:
+  win: E:\windows\project\python\Audio_MAE_Base_ST\workspace
+  linux:
+
+## voice print
+#vp_database:
+#  win: ckpt\vp\hts_at\model_stopby_train_loss_v0.pkl
+#  linux: ../hts_at/ckpt/vp/hts_at/model_stopby_train_loss_v0.pkl
+#vp_thrd: 80
+#audio_num_per_vp: 10
+
+sys_compatible_keys:
+  - data_dir
+  - encoder_ckpt
+  - decoder_ckpt
+  - workspace
+
