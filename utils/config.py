@@ -13,13 +13,11 @@ class AMAEConfig:
     workspace: str = None
 
     # audio Fband config
-    audio_len: float = 10
+    # audio_len: float = 10
     sample_rate: int = 32000
-    n_fft: int = 1024  # also configure stft window size
-    hop_size: int = 320
+    frame_length: int = 25
+    frame_shift: int = 10
     mel_bins: int = 64
-    f_min: float = 50.
-    f_max: float = None
 
     # training config
     pre_training: bool = True

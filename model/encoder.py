@@ -56,16 +56,11 @@ class STEncoder(nn.Module):
         super().__init__()
 
         self.sr = cfg.sample_rate
-        self.nfft = cfg.n_fft
-        self.hop_size = cfg.hop_size
         self.mel_bins = cfg.mel_bins
-        self.f_min: float = cfg.f_min
-        self.f_max: float = cfg.f_max
 
         self.ds_ratio = cfg.extra_downsample_ratio
         self.num_classes = cfg.num_classes
         self.freq_ratio = cfg.spec_size // cfg.mel_bins
-        self.target_time = int(cfg.spec_size * self.freq_ratio * self.ds_ratio)
         self.target_freq = cfg.spec_size // self.freq_ratio
 
         self.spec_size = cfg.spec_size
@@ -89,10 +84,6 @@ class STEncoder(nn.Module):
         self.mask_ratio = cfg.mask_ratio
         self.restore_mask_only = cfg.restore_mask_only
 
-        self.spectrogram_extractor = Spectrogram(n_fft=self.nfft, hop_length=self.hop_size, win_length=self.nfft)
-        # log_mel feature extractor
-        self.logmel_extractor = LogmelFilterBank(sr=self.sr, n_fft=self.nfft, n_mels=self.mel_bins,
-                                                 fmin=self.f_min, fmax=self.f_max, top_db=None)
         self.spec_augmenter = SpecAugmentation(time_drop_width=64, time_stripes_num=2,
                                                freq_drop_width=8, freq_stripes_num=2)  # 2 2
         self.bn0 = nn.BatchNorm2d(self.mel_bins)
@@ -147,26 +138,10 @@ class STEncoder(nn.Module):
 
         self.apply(init_weights)
 
-    def fband(self, x):
-        x = self.spectrogram_extractor(x)  # [B, L](e.g. [4, 983039]) -> [B, 1, T, f](e.g. [4, 1, 3072, 513])
-        x = self.logmel_extractor(x)  # -> [B, 1, T, mel_bin](e.g. [4, 1, 3072, 64])
-        return x
-
     def standardization_audio(self, x):
         batch, channel, time, freq = x.shape
         assert freq <= self.target_freq, \
             f"the freq size({freq}) should less than or equal to the swin input size({self.target_freq})"
-
-        # to avoid bicubic zero error
-        if time < self.target_time:
-            x = nn.functional.interpolate(x, (self.target_time, x.shape[3]), mode="bicubic", align_corners=True)
-        elif time > self.target_time:
-            if self.training:
-                start = random.randint(0, time - self.target_time)
-            else:
-                start = int((time - self.target_time) / 2)
-
-            x = x[:, :, start: start + self.target_time, :]
 
         if freq < self.target_freq:
             x = nn.functional.interpolate(x, (x.shape[2], self.target_freq), mode="bicubic", align_corners=True)
@@ -197,9 +172,8 @@ class STEncoder(nn.Module):
 
     # input: [B, 1, T, mel_bin](e.g. [4, 1, 256, 256])
     def forward(self, x):
-        x = self.fband(x)  # -> [B, 1, T, mel_bin](e.g. [4, 1, 3072, 64])
         x = self.standardization_audio(x)
-        ori_fband = x.clone().detach()
+        ori_fbank = x.clone().detach()
 
         mask = None
         if self.training:
@@ -241,7 +215,7 @@ class STEncoder(nn.Module):
             'latent': latent_wav,
             'feature': latent_feature,
             'classifier': classifier_output,
-            'ori_fband': ori_fband,
+            'ori_fbank': ori_fbank,
             'mask': mask,
         }
 

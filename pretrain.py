@@ -52,7 +52,7 @@ def forward_loss(target, mask, pred, norm_pix_loss):
 
 
 # ckpt: https://www.cnblogs.com/booturbo/p/17358917.html
-def train(cfg: AMAEConfig, ddp=False):
+def train(cfg: AMAEConfig, ddp=False, amp=False):
     def _lr_foo(_epoch):
         if _epoch < 3:
             # warm up lr
@@ -83,21 +83,23 @@ def train(cfg: AMAEConfig, ddp=False):
 
         if gpu == 0:
             prepare_environment(cfg)
-            logger.debug(f'enable DDP, world size: {world_size}')
+            logger.debug(f'enable DDP, world size: {world_size}, use amp: {amp}')
         torch.cuda.set_device(gpu)
         device = torch.device(f"cuda:{gpu}")
         logger.debug(f'pid: {os.getpid()}, ppid: {os.getppid()}, gpu: {gpu}-{rank}')
     else:
         prepare_environment(cfg)
         device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
-        logger.debug(f'disable DDP, training device: {device}')
+        logger.debug(f'disable DDP, training device: {device}, use amp: {amp}')
+
+    assert not (amp and device == torch.device("cpu")), f'do not suggest use amp on cpu'
 
     # 2. load ckpt
     ckpt_E = torch.load(cfg.encoder_ckpt, map_location=device) if cfg.load_encoder else None
     ckpt_D = torch.load(cfg.decoder_ckpt, map_location=device) if cfg.load_decoder else None
 
     # 3. dataset
-    dataset = PretrainDataset(root_dirs=[cfg.data_dir], audio_len=cfg.audio_len)
+    dataset = PretrainDataset(cfg)
     dataloader = DataLoader(dataset, batch_size=cfg.batch_size, shuffle=True)
     if ddp:
         train_sampler = torch.utils.data.distributed.DistributedSampler(
@@ -154,11 +156,12 @@ def train(cfg: AMAEConfig, ddp=False):
         sched_D.load_state_dict(ckpt_D['scheduler'])
 
     # training
+    model_E.train()
+    model_D.train()
     step = 0
     start_epoch = 0 if ckpt_E is None else ckpt_E['epoch']+1
     loss_record = []
-    model_E.train()
-    model_D.train()
+    scaler = torch.cuda.amp.GradScaler() if amp else None
     for epoch in range(start_epoch, cfg.max_epoch):
         if ddp:
             train_sampler.set_epoch(epoch)
@@ -169,22 +172,39 @@ def train(cfg: AMAEConfig, ddp=False):
             opt_D.zero_grad()
 
             batch = batch.cuda() if ddp else batch.to(device)
-            encoder_output = model_E(batch)
-            decoder_output = model_D(encoder_output['latent'])
-            loss = forward_loss(
-                target=encoder_output['ori_fband'],
-                mask=encoder_output['mask'],
-                pred=decoder_output,
-                norm_pix_loss=cfg.norm_pix_loss,
-            )
 
-            loss.backward()
-            opt_E.step()
-            opt_D.step()
+            if amp:
+                with torch.cuda.amp.autocast():
+                    encoder_output = model_E(batch)
+                    decoder_output = model_D(encoder_output['latent'])
+                    loss = forward_loss(
+                        target=encoder_output['ori_fbank'],
+                        mask=encoder_output['mask'],
+                        pred=decoder_output,
+                        norm_pix_loss=cfg.norm_pix_loss,
+                    )
+                scaler.scale(loss).backward()
+                scaler.step(opt_E)
+                scaler.step(opt_D)
+                scaler.update()
+
+            else:
+                encoder_output = model_E(batch)
+                decoder_output = model_D(encoder_output['latent'])
+                loss = forward_loss(
+                    target=encoder_output['ori_fbank'],
+                    mask=encoder_output['mask'],
+                    pred=decoder_output,
+                    norm_pix_loss=cfg.norm_pix_loss,
+                )
+                loss.backward()
+                opt_E.step()
+                opt_D.step()
+
             if (not ddp or gpu == 0) and step % 10 == 0:
                 progress_bar.set_postfix(loss=loss.item())
                 if step % 50 == 0:
-                    logger.info(f'step {step} training loss {loss}')
+                    logger.info(f'training loss {format(loss.item(), ".5f")} at step {step}')
             loss_record.append(loss.item())
             step += 1
         sched_E.step()
@@ -214,13 +234,15 @@ def train(cfg: AMAEConfig, ddp=False):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--cfg_path', default=None, type=str)
+    parser.add_argument('--amp', action='store_true', help='use amp')
     args = parser.parse_args()
     assert args.cfg_path is not None and os.path.exists(args.cfg_path), \
         f'config file does not exist: {args["cfg_path"]}'
 
     cfg = AMAEConfig(args.cfg_path)
     ddp = True if 'WORLD_SIZE' in os.environ.keys() else False
-    train(cfg, ddp)
+    amp = args.amp
+    train(cfg, ddp, amp)
 
 
 # ddp: OMP_NUM_THREADS=8 torchrun --nnodes=1 --node_rank=0 --nproc_per_node=2 --master_addr="192.168.1.250" --master_port=23456 pretrain.py --cfg_path /home/tlzn/users/zlqiu/project/Audio_MAE_Base_ST/config/pretrain.yaml
