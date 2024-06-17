@@ -38,7 +38,9 @@ DC_qkv_bias: True
 
 # training config
 pre_training: True
-batch_size: 32
+load_encoder: False
+load_decoder: False
+batch_size: 64
 learning_rate: 0.001  # 1e-4 also workable
 max_epoch: 100
 lr_scheduler: [ 0.02, 0.05, 0.1 ]
@@ -52,10 +54,10 @@ data_dir:
   win: E:\common\dataset\audio\audio_set\balanced_train_segments
   linux: /home/tlzn/datas/audio_set/unbalanced_train_segments
 encoder_ckpt:
-  win: E:\project\python\auto_encoder\workspace\st_model.pth
+  win: E:\windows\project\python\Audio_MAE_Base_ST\workspace\2024-06-15_21-16-26\encoder_R1_E1.pth
   linux: ckpt/pretrained/hts_at/HTSAT_ESC_exp=1_fold=1_acc=0.985.pth
 decoder_ckpt:
-  win: E:\project\python\auto_encoder\workspace\st_classifier.pth
+  win: E:\windows\project\python\Audio_MAE_Base_ST\workspace\2024-06-15_21-16-26\decoder_R1_E1.pth
   linux: ckpt/pretrained/hts_at/HTSAT_ESC_exp=1_fold=1_acc=0.985.pth
 workspace:
   win: E:\windows\project\python\Audio_MAE_Base_ST\workspace

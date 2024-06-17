@@ -23,6 +23,8 @@ class AMAEConfig:
 
     # training config
     pre_training: bool = True
+    load_encoder: bool = False
+    load_decoder: bool = False
     batch_size: int = 128
     learning_rate: float = 0.001  # 1e-4 also workable
     max_epoch: int = 200

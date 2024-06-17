@@ -33,7 +33,7 @@ def prepare_environment(cfg):
         level="INFO"
     )
 
-    logger.info(f'########## train start at {time_str}########## train start at ')
+    logger.info(f'########## train start at {time_str} ##########')
     logger.info(f'config: {cfg.cfg_path}')
     logger.info(f'workspace: {cfg.workspace}')
 
@@ -50,6 +50,7 @@ def forward_loss(target, mask, pred, norm_pix_loss):
 
     return loss
 
+
 # ckpt: https://www.cnblogs.com/booturbo/p/17358917.html
 def train(cfg: AMAEConfig, ddp=False):
     def _lr_foo(_epoch):
@@ -63,8 +64,12 @@ def train(cfg: AMAEConfig, ddp=False):
                 lr_scale = max(cfg.lr_scheduler[0] * (0.98 ** _epoch), 0.03)
             else:
                 lr_scale = cfg.lr_scheduler[lr_pos]
+
+        if not ddp or gpu == 0:
+            logger.info(f'adjust lr scale {lr_scale} at epoch {_epoch+1}')
         return lr_scale
 
+    # 1. prepare
     if ddp:
         gpu = int(os.environ["LOCAL_RANK"])
         rank = int(os.environ["RANK"])
@@ -80,13 +85,18 @@ def train(cfg: AMAEConfig, ddp=False):
             prepare_environment(cfg)
             logger.debug(f'enable DDP, world size: {world_size}')
         torch.cuda.set_device(gpu)
+        device = torch.device(f"cuda:{gpu}")
         logger.debug(f'pid: {os.getpid()}, ppid: {os.getppid()}, gpu: {gpu}-{rank}')
     else:
         prepare_environment(cfg)
         device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
         logger.debug(f'disable DDP, training device: {device}')
 
-    # dataset
+    # 2. load ckpt
+    ckpt_E = torch.load(cfg.encoder_ckpt, map_location=device) if cfg.load_encoder else None
+    ckpt_D = torch.load(cfg.decoder_ckpt, map_location=device) if cfg.load_decoder else None
+
+    # 3. dataset
     dataset = PretrainDataset(root_dirs=[cfg.data_dir], audio_len=cfg.audio_len)
     dataloader = DataLoader(dataset, batch_size=cfg.batch_size, shuffle=True)
     if ddp:
@@ -100,17 +110,16 @@ def train(cfg: AMAEConfig, ddp=False):
                                 shuffle=False,  # sampler will do shuffle
                                 sampler=train_sampler)
 
-    # model
-    model_E = STEncoder(cfg)
-    model_D = STDecoder(cfg)
+    # 4. model & optimizer
+    model_E = STEncoder(cfg).to(device)
+    model_E.load_state_dict(ckpt_E['parameter']) if ckpt_E is not None else None
+    model_D = STDecoder(cfg).to(device)
+    model_D.load_state_dict(ckpt_D['parameter']) if ckpt_D is not None else None
     if ddp:
-        model_E = torch.nn.SyncBatchNorm.convert_sync_batchnorm(model_E.cuda())
+        model_E = torch.nn.SyncBatchNorm.convert_sync_batchnorm(model_E)
         model_E = nn.parallel.DistributedDataParallel(model_E, device_ids=[gpu])
         model_D = torch.nn.SyncBatchNorm.convert_sync_batchnorm(model_D.cuda())
         model_D = nn.parallel.DistributedDataParallel(model_D, device_ids=[gpu])
-    else:
-        model_E = model_E.to(device)
-        model_D = model_D.to(device)
 
     opt_E = torch.optim.AdamW(
         params=[{'params': model_E.parameters(), 'initial_lr': cfg.learning_rate}],
@@ -122,8 +131,11 @@ def train(cfg: AMAEConfig, ddp=False):
     sched_E = torch.optim.lr_scheduler.LambdaLR(
         opt_E,
         lr_lambda=_lr_foo,
-        last_epoch=-1,  # todo
+        last_epoch=-1 if ckpt_E is None else ckpt_E['epoch'],  # todo
     )
+    if ckpt_E is not None:
+        opt_E.load_state_dict(ckpt_E['optimizer'])
+        sched_E.load_state_dict(ckpt_E['scheduler'])
 
     opt_D = torch.optim.AdamW(
         params=[{'params': model_D.parameters(), 'initial_lr': cfg.learning_rate}],
@@ -135,14 +147,19 @@ def train(cfg: AMAEConfig, ddp=False):
     sched_D = torch.optim.lr_scheduler.LambdaLR(
         opt_D,
         lr_lambda=_lr_foo,
-        last_epoch=-1,  # todo
+        last_epoch=-1 if ckpt_D is None else ckpt_D['epoch'],  # todo
     )
+    if ckpt_D is not None:
+        opt_D.load_state_dict(ckpt_D['optimizer'])
+        sched_D.load_state_dict(ckpt_D['scheduler'])
 
+    # training
     step = 0
+    start_epoch = 0 if ckpt_E is None else ckpt_E['epoch']+1
     loss_record = []
     model_E.train()
     model_D.train()
-    for epoch in range(cfg.max_epoch):
+    for epoch in range(start_epoch, cfg.max_epoch):
         if ddp:
             train_sampler.set_epoch(epoch)
 
@@ -167,7 +184,7 @@ def train(cfg: AMAEConfig, ddp=False):
             if (not ddp or gpu == 0) and step % 10 == 0:
                 progress_bar.set_postfix(loss=loss.item())
                 if step % 50 == 0:
-                    logger.info(f'step {step} training loss {loss}.')
+                    logger.info(f'step {step} training loss {loss}')
             loss_record.append(loss.item())
             step += 1
         sched_E.step()
@@ -184,9 +201,9 @@ def train(cfg: AMAEConfig, ddp=False):
                   'epoch': epoch,
                   }
         torch.save(ckpt_E, os.path.join(cfg.workspace,
-                                        f'encoder_ratio_{cfg.extra_downsample_ratio}_epoch_{epoch+1}.pth'))
+                                        f'encoder_R{cfg.extra_downsample_ratio}_E{epoch+1}.pth'))
         torch.save(ckpt_D, os.path.join(cfg.workspace,
-                                        f'decoder_ratio_{cfg.extra_downsample_ratio}_epoch_{epoch+1}.pth'))
+                                        f'decoder_R{cfg.extra_downsample_ratio}_E{epoch+1}.pth'))
 
         with open(os.path.join(cfg.workspace, f'loss_record_epoch_{epoch+1}.txt'), 'w') as f:
             for loss in loss_record:
