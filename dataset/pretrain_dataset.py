@@ -11,7 +11,7 @@ class PretrainDataset(Dataset):
     def __init__(self, cfg: AMAEConfig):
         super().__init__()
         self.data_dir = cfg.data_dir
-        self.hdf5 = cfg.hdf5_file if cfg.hdf5_file is not None else None
+        self.h5f = h5py.File(cfg.hdf5_file, 'a')if cfg.hdf5_file is not None else None
 
         self.sr = cfg.sample_rate
         self.mel_bins = cfg.mel_bins
@@ -33,15 +33,12 @@ class PretrainDataset(Dataset):
 
     def __getitem__(self, idx):
         wav_name = self.wav_files[idx]
-        if self.hdf5 is not None:
-            h5f = h5py.File(self.hdf5, 'a')
-            if wav_name in h5f:
-                fbank = torch.tensor(h5f[wav_name])
+        if self.h5f is not None:
+            if wav_name in self.h5f:
+                fbank = torch.tensor(self.h5f[wav_name][:])
             else:
                 fbank = self.wav2fbank(os.path.join(self.data_dir, wav_name))
-                h5f[wav_name] = fbank.numpy()
-
-            h5f.close()
+                self.h5f[wav_name] = fbank.numpy()
         else:
             fbank = self.wav2fbank(os.path.join(self.data_dir, wav_name))
 

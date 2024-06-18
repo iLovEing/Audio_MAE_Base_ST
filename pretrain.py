@@ -82,14 +82,14 @@ def train(cfg: AMAEConfig, ddp=False, amp=False, num_workers=1):
 
         if gpu == 0:
             prepare_environment(cfg)
-            logger.debug(f'enable DDP, world size: {world_size}, use amp: {amp}')
+            logger.debug(f'enable DDP, world size: {world_size}, use amp: {amp}, num_workers {num_workers}')
         torch.cuda.set_device(gpu)
         device = torch.device(f"cuda:{gpu}")
         logger.debug(f'pid: {os.getpid()}, ppid: {os.getppid()}, gpu: {gpu}-{rank}')
     else:
         prepare_environment(cfg)
         device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
-        logger.debug(f'disable DDP, training device: {device}, use amp: {amp}')
+        logger.debug(f'disable DDP, training device: {device}, use amp: {amp}, num_workers {num_workers}')
 
     assert not (amp and device == torch.device("cpu")), f'do not suggest use amp on cpu'
 
