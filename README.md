@@ -1,2 +1,2 @@
-# audio_autoencoder_based_ST
-audio auto-encoder based on swin-transformer
+# Audio_MAE_Based_ST
+Audio masked-auto-encoder based on swin-transformer
