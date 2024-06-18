@@ -1,2 +1,2 @@
-# Audio_MAE_Based_ST
+# Audio_MAE_Base_ST
 Audio masked-auto-encoder based on swin-transformer
