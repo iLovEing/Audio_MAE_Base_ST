@@ -26,9 +26,12 @@ class PretrainDataset(Dataset):
         wav_p = self.wav_files[idx]
         sgnl, _ = librosa.load(wav_p, sr=self.sr)
 
-        fbank = kaldi.fbank(torch.Tensor(sgnl).unsqueeze(0), sample_frequency=self.sr, num_mel_bins=self.mel_bins,
-                            frame_length=self.frame_length, frame_shift=self.frame_shift,
-                            use_energy=False, htk_compat=True, window_type='hanning', dither=0.0)
+        try:
+            fbank = kaldi.fbank(torch.Tensor(sgnl).unsqueeze(0), sample_frequency=self.sr, num_mel_bins=self.mel_bins,
+                                frame_length=self.frame_length, frame_shift=self.frame_shift,
+                                use_energy=False, htk_compat=True, window_type='hanning', dither=0.0)
+        except Exception as e:
+            assert f'fbank error at file {wav_p}, error msg: {e}'
 
         p = self.target_frame - fbank.shape[0]
         if p > 0:

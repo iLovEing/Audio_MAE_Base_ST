@@ -240,7 +240,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--cfg_path', default=None, type=str)
     parser.add_argument('--amp', action='store_true', help='use amp')
-    parser.add_argument('--thread', default=1, type=int, help='num_workers')
+    parser.add_argument('--thread', default=0, type=int, help='num_workers')
     args = parser.parse_args()
     assert args.cfg_path is not None and os.path.exists(args.cfg_path), \
         f'config file does not exist: {args["cfg_path"]}'
