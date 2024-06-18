@@ -1,5 +1,4 @@
 import os
-import sys
 import argparse
 from datetime import datetime
 from tqdm import tqdm
@@ -177,7 +176,6 @@ def train(cfg: AMAEConfig, ddp=False, amp=False, num_workers=1):
             opt_D.zero_grad()
 
             batch = batch.cuda() if ddp else batch.to(device)
-
             if amp:
                 with torch.cuda.amp.autocast():
                     encoder_output = model_E(batch)
@@ -212,6 +210,7 @@ def train(cfg: AMAEConfig, ddp=False, amp=False, num_workers=1):
                     logger.info(f'training loss {format(loss.item(), ".5f")} at step {step}')
             loss_record.append(loss.item())
             step += 1
+
         sched_E.step()
         sched_D.step()
 
@@ -252,8 +251,8 @@ def main():
     train(cfg, ddp, amp, num_workers)
 
 
-# ddp: OMP_NUM_THREADS=8 torchrun --nnodes=1 --node_rank=0 --nproc_per_node=2 --master_addr="192.168.1.250" --master_port=23456 \
-# pretrain.py --cfg_path /home/tlzn/users/zlqiu/project/Audio_MAE_Base_ST/config/pretrain.yaml --amp --thread 12
+# ddp: torchrun --nnodes=1 --node_rank=0 --nproc_per_node=2 --master_addr="192.168.1.250" --master_port=23456 \
+# pretrain.py --cfg_path /home/tlzn/users/zlqiu/project/Audio_MAE_Base_ST/config/pretrain.yaml --amp --thread 10
 # normal: python pretrain.py --cfg_path /home/tlzn/users/zlqiu/project/Audio_MAE_Base_ST/config/pretrain.yaml
 if __name__ == '__main__':
     main()

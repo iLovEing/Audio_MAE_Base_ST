@@ -1,4 +1,5 @@
 import os
+import h5py
 import torch
 import librosa
 from utils import AMAEConfig
@@ -8,6 +9,10 @@ from torch.utils.data import Dataset
 
 class PretrainDataset(Dataset):
     def __init__(self, cfg: AMAEConfig):
+        super().__init__()
+        self.data_dir = cfg.data_dir
+        self.hdf5 = cfg.hdf5_file if cfg.hdf5_file is not None else None
+
         self.sr = cfg.sample_rate
         self.mel_bins = cfg.mel_bins
         self.frame_length = cfg.frame_length
@@ -16,22 +21,29 @@ class PretrainDataset(Dataset):
         self.target_frame = int(cfg.spec_size * freq_ratio * cfg.extra_downsample_ratio)
 
         self.wav_files = []
-        for wav in os.listdir(cfg.data_dir):
-            if not wav.endswith('wav'):
-                continue
-            wav_path = os.path.join(cfg.data_dir, wav)
-            self.wav_files.append(wav_path)
+        for wav in os.listdir(self.data_dir):
+            self.wav_files.append(wav)
+
+    def wav2fbank(self, wav_f):
+        sgnl, _ = librosa.load(wav_f, sr=self.sr)
+        fbank = kaldi.fbank(torch.Tensor(sgnl).unsqueeze(0), sample_frequency=self.sr, num_mel_bins=self.mel_bins,
+                            frame_length=self.frame_length, frame_shift=self.frame_shift,
+                            use_energy=False, htk_compat=True, window_type='hanning', dither=0.0)
+        return fbank
 
     def __getitem__(self, idx):
-        wav_p = self.wav_files[idx]
-        sgnl, _ = librosa.load(wav_p, sr=self.sr)
+        wav_name = self.wav_files[idx]
+        if self.hdf5 is not None:
+            h5f = h5py.File(self.hdf5, 'a')
+            if wav_name in h5f:
+                fbank = torch.tensor(h5f[wav_name])
+            else:
+                fbank = self.wav2fbank(os.path.join(self.data_dir, wav_name))
+                h5f[wav_name] = fbank.numpy()
 
-        try:
-            fbank = kaldi.fbank(torch.Tensor(sgnl).unsqueeze(0), sample_frequency=self.sr, num_mel_bins=self.mel_bins,
-                                frame_length=self.frame_length, frame_shift=self.frame_shift,
-                                use_energy=False, htk_compat=True, window_type='hanning', dither=0.0)
-        except Exception as e:
-            assert f'fbank error at file {wav_p}, error msg: {e}'
+            h5f.close()
+        else:
+            fbank = self.wav2fbank(os.path.join(self.data_dir, wav_name))
 
         p = self.target_frame - fbank.shape[0]
         if p > 0:
@@ -41,7 +53,6 @@ class PretrainDataset(Dataset):
             fbank = fbank[0:self.target_frame, :]
 
         return fbank.unsqueeze(0)
-
 
     def __len__(self):
         return len(self.wav_files)

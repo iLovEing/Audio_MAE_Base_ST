@@ -51,6 +51,9 @@ restore_mask_only: True  # grid
 data_dir:
   win: E:\common\dataset\audio\audio_set\balanced_train_segments
   linux: /home/tlzn/datas/audio_set/unbalanced_train_segments
+hdf5_file:  # set empty will not use hdf5
+  win:
+  linux:
 encoder_ckpt:
   win: E:\windows\project\python\Audio_MAE_Base_ST\workspace\2024-06-15_21-16-26\encoder_R1_E1.pth
   linux: ckpt/pretrained/hts_at/HTSAT_ESC_exp=1_fold=1_acc=0.985.pth
@@ -70,6 +73,7 @@ workspace:
 
 sys_compatible_keys:
   - data_dir
+  - hdf5_file
   - encoder_ckpt
   - decoder_ckpt
   - workspace
