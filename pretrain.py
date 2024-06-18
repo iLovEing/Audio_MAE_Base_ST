@@ -52,7 +52,7 @@ def forward_loss(target, mask, pred, norm_pix_loss):
 
 
 # ckpt: https://www.cnblogs.com/booturbo/p/17358917.html
-def train(cfg: AMAEConfig, ddp=False, amp=False):
+def train(cfg: AMAEConfig, ddp=False, amp=False, num_workers=1):
     def _lr_foo(_epoch):
         if _epoch < 3:
             # warm up lr
@@ -100,7 +100,6 @@ def train(cfg: AMAEConfig, ddp=False, amp=False):
 
     # 3. dataset
     dataset = PretrainDataset(cfg)
-    dataloader = DataLoader(dataset, batch_size=cfg.batch_size, shuffle=True)
     if ddp:
         train_sampler = torch.utils.data.distributed.DistributedSampler(
             dataset,
@@ -110,7 +109,13 @@ def train(cfg: AMAEConfig, ddp=False, amp=False):
         dataloader = DataLoader(dataset,
                                 batch_size=cfg.batch_size,
                                 shuffle=False,  # sampler will do shuffle
-                                sampler=train_sampler)
+                                sampler=train_sampler,
+                                num_workers=num_workers)
+    else:
+        dataloader = DataLoader(dataset,
+                                batch_size=cfg.batch_size,
+                                shuffle=True,
+                                num_workers=num_workers)
 
     # 4. model & optimizer
     model_E = STEncoder(cfg).to(device)
@@ -235,6 +240,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--cfg_path', default=None, type=str)
     parser.add_argument('--amp', action='store_true', help='use amp')
+    parser.add_argument('--thread', default=1, type=int, help='num_workers')
     args = parser.parse_args()
     assert args.cfg_path is not None and os.path.exists(args.cfg_path), \
         f'config file does not exist: {args["cfg_path"]}'
@@ -242,10 +248,12 @@ def main():
     cfg = AMAEConfig(args.cfg_path)
     ddp = True if 'WORLD_SIZE' in os.environ.keys() else False
     amp = args.amp
-    train(cfg, ddp, amp)
+    num_workers = args.thread
+    train(cfg, ddp, amp, num_workers)
 
 
-# ddp: OMP_NUM_THREADS=8 torchrun --nnodes=1 --node_rank=0 --nproc_per_node=2 --master_addr="192.168.1.250" --master_port=23456 pretrain.py --cfg_path /home/tlzn/users/zlqiu/project/Audio_MAE_Base_ST/config/pretrain.yaml
+# ddp: OMP_NUM_THREADS=8 torchrun --nnodes=1 --node_rank=0 --nproc_per_node=2 --master_addr="192.168.1.250" --master_port=23456 \
+# pretrain.py --cfg_path /home/tlzn/users/zlqiu/project/Audio_MAE_Base_ST/config/pretrain.yaml --amp --thread 12
 # normal: python pretrain.py --cfg_path /home/tlzn/users/zlqiu/project/Audio_MAE_Base_ST/config/pretrain.yaml
 if __name__ == '__main__':
     main()
