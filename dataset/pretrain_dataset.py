@@ -2,6 +2,7 @@ import os
 import h5py
 import torch
 import librosa
+import pandas as pd
 from utils import AMAEConfig
 import torchaudio.compliance.kaldi as kaldi
 from torch.utils.data import Dataset
@@ -10,8 +11,10 @@ from torch.utils.data import Dataset
 class PretrainDataset(Dataset):
     def __init__(self, cfg: AMAEConfig):
         super().__init__()
-        self.data_dir = cfg.data_dir
-        self.h5f = h5py.File(cfg.hdf5_file, 'a')if cfg.hdf5_file is not None else None
+        df = pd.read_csv(cfg.data_csv, index_col=0)
+        assert 'type' in df.columns and 'file' in df.columns
+        self.wav_files = list(df[df['type'] == 'train']['file'])
+        self.h5f = h5py.File(cfg.hdf5_file, 'a') if cfg.hdf5_file is not None else None
 
         self.sr = cfg.sample_rate
         self.mel_bins = cfg.mel_bins
@@ -19,10 +22,6 @@ class PretrainDataset(Dataset):
         self.frame_shift = cfg.frame_shift
         freq_ratio = cfg.spec_size // cfg.mel_bins
         self.target_frame = int(cfg.spec_size * freq_ratio * cfg.extra_downsample_ratio)
-
-        self.wav_files = []
-        for wav in os.listdir(self.data_dir):
-            self.wav_files.append(wav)
 
     def wav2fbank(self, wav_f):
         sgnl, _ = librosa.load(wav_f, sr=self.sr)
@@ -32,15 +31,16 @@ class PretrainDataset(Dataset):
         return fbank
 
     def __getitem__(self, idx):
-        wav_name = self.wav_files[idx]
+        wav_f = self.wav_files[idx]
+        wav_name = os.path.basename(wav_f)
         if self.h5f is not None:
             if wav_name in self.h5f:
                 fbank = torch.tensor(self.h5f[wav_name][:])
             else:
-                fbank = self.wav2fbank(os.path.join(self.data_dir, wav_name))
+                fbank = self.wav2fbank(wav_f)
                 self.h5f[wav_name] = fbank.numpy()
         else:
-            fbank = self.wav2fbank(os.path.join(self.data_dir, wav_name))
+            fbank = self.wav2fbank(wav_f)
 
         p = self.target_frame - fbank.shape[0]
         if p > 0:

@@ -48,21 +48,21 @@ norm_pix_loss: True  # grid
 restore_mask_only: True  # grid
 
 # paths
-data_dir:
-  win: E:\common\dataset\audio\audio_set\balanced_train_segments
-  linux: /home/tlzn/datas/audio_set/unbalanced_train_segments
+data_csv:
+  win: workspace\datas.csv
+  linux: /home/tlzn/users/zlqiu/datas/zlqiu/Audio_MAE_Base_ST/datas.csv
 hdf5_file:  # set empty will not use hdf5
-  win: workspace\dataset.hdf5
-  linux:
+  win: workspace\dataset_pretrain.hdf5
+  linux: /home/tlzn/users/zlqiu/datas/zlqiu/Audio_MAE_Base_ST/dataset_pretrain.hdf5
 encoder_ckpt:
-  win: E:\windows\project\python\Audio_MAE_Base_ST\workspace\2024-06-15_21-16-26\encoder_R1_E1.pth
+  win: workspace\2024-06-15_21-16-26\encoder_R1_E1.pth
   linux: ckpt/pretrained/hts_at/HTSAT_ESC_exp=1_fold=1_acc=0.985.pth
 decoder_ckpt:
-  win: E:\windows\project\python\Audio_MAE_Base_ST\workspace\2024-06-15_21-16-26\decoder_R1_E1.pth
+  win: workspace\2024-06-15_21-16-26\decoder_R1_E1.pth
   linux: ckpt/pretrained/hts_at/HTSAT_ESC_exp=1_fold=1_acc=0.985.pth
 workspace:
-  win: E:\windows\project\python\Audio_MAE_Base_ST\workspace
-  linux: /home/tlzn/users/zlqiu/project/Audio_MAE_Base_ST/workspace
+  win: workspace
+  linux: workspace
 
 ## voice print
 #vp_database:

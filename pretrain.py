@@ -92,6 +92,8 @@ def train(cfg: AMAEConfig, ddp=False, amp=False, num_workers=1):
         logger.debug(f'disable DDP, training device: {device}, use amp: {amp}, num_workers {num_workers}')
 
     assert not (amp and device == torch.device("cpu")), f'do not suggest use amp on cpu'
+    assert cfg.hdf5_file is None or num_workers == 0, \
+        f'not allow enable both hdf5 and dataloader mulit process feature'
 
     # 2. load ckpt
     ckpt_E = torch.load(cfg.encoder_ckpt, map_location=device) if cfg.load_encoder else None

@@ -7,7 +7,7 @@ from dataclasses import dataclass
 class AMAEConfig:
     # paths
     cfg_path: str = None
-    data_dir: str = None
+    data_csv: str = None
     hdf5_file: str = None
     encoder_ckpt: str = None  # set None will not load checkpoint
     decoder_ckpt: str = None
