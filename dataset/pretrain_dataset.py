@@ -3,6 +3,7 @@ import h5py
 import torch
 import librosa
 import pandas as pd
+import numpy as np
 import bisect
 import torchaudio.compliance.kaldi as kaldi
 from torch.utils.data import Dataset
@@ -21,6 +22,7 @@ class ASPretrain(Dataset):
         self.h5f_l = self.generate_hdf5_handler(cfg.hdf5_file)
         self.h5f_idx_map = [round(i * len(self.wav_files) / 10) for i in range(1, 1+10)]
 
+        self.use_roll = cfg.roll_mag_aug
         self.sr = cfg.sample_rate
         self.mel_bins = cfg.mel_bins
         self.frame_length = cfg.frame_length
@@ -34,16 +36,27 @@ class ASPretrain(Dataset):
 
         suffix = base_name.split('.')[-1]
         prefix = base_name[:-len(suffix) - 1]
-        hdf5_files = [prefix + f'_{i}.' + suffix for i in range(2)]
+        hdf5_files = [prefix + f'_{i}.' + suffix for i in range(10)]
         h5f_l = [h5py.File(_hdf5_f,
                            mode='a' if self.hdf5_write else 'r',
                            locking=False)
                  for _hdf5_f in hdf5_files]
         return h5f_l
 
-    def wav2fbank(self, wav_f):
-        sgnl, _ = librosa.load(wav_f, sr=self.sr)
-        fbank = kaldi.fbank(torch.Tensor(sgnl).unsqueeze(0), sample_frequency=self.sr, num_mel_bins=self.mel_bins,
+    def _pre_process(self, waveform):
+        waveform = waveform - waveform.mean()
+        if self.use_roll:
+            idx = np.random.randint(len(waveform))
+            rolled_waveform = np.roll(waveform, idx)
+            mag = np.random.beta(10, 10) + 0.5
+            waveform = rolled_waveform * mag
+
+        return torch.Tensor(waveform)
+
+    def _wav2fbank(self, wav_f):
+        waveform, _ = librosa.load(wav_f, sr=self.sr)
+        waveform = self._pre_process(waveform)
+        fbank = kaldi.fbank(waveform.unsqueeze(0), sample_frequency=self.sr, num_mel_bins=self.mel_bins,
                             frame_length=self.frame_length, frame_shift=self.frame_shift,
                             use_energy=False, htk_compat=True, window_type='hanning', dither=0.0)
         return fbank
@@ -52,15 +65,15 @@ class ASPretrain(Dataset):
         wav_f = self.wav_files[idx]
         wav_name = os.path.basename(wav_f)
         if self.use_hdf5 is not None:
-            h5f = self.h5f_l[bisect.bisect_right(self.h5f_idx_map, idx)]
+            h5f = self.h5f_l[bisect.bisect_left(self.h5f_idx_map, idx)]
             if wav_name in h5f:
                 fbank = torch.tensor(h5f[wav_name][:])
             else:
-                fbank = self.wav2fbank(wav_f)
+                fbank = self._wav2fbank(wav_f)
                 if self.hdf5_write:
                     h5f[wav_name] = fbank.numpy()
         else:
-            fbank = self.wav2fbank(wav_f)
+            fbank = self._wav2fbank(wav_f)
 
         p = self.target_frame - fbank.shape[0]
         if p > 0:
