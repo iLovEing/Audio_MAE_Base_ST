@@ -21,6 +21,7 @@ class AMAEConfig:
     mel_bins: int = 64
 
     # training config
+    h5df_write: bool = False
     pre_training: bool = True
     load_encoder: bool = False
     load_decoder: bool = False
