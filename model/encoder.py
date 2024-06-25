@@ -175,16 +175,16 @@ class STEncoder(nn.Module):
         x = self.standardization_audio(x)
         ori_fbank = x.clone().detach()
 
+        x = x.transpose(1, 3)
+        x = self.bn0(x)
+        x = x.transpose(1, 3)
+
         mask = None
         if self.training:
             if self.pre_training:
                 x, mask = self.random_mask(x)
             else:
                 x = self.spec_augmenter(x)
-
-        x = x.transpose(1, 3)
-        x = self.bn0(x)
-        x = x.transpose(1, 3)
 
         # -> [B, C, img_H(f), img_W(T)](e.g. [4, 1, 256, 256])
         x = reshape_wav2img(x, self.freq_ratio)

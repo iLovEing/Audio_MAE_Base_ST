@@ -224,14 +224,17 @@ def train(cfg: AMAEConfig, ddp=False, amp=False, num_workers=1):
                   'scheduler': sched_D.state_dict(),
                   'epoch': epoch,
                   }
-        torch.save(ckpt_E, os.path.join(cfg.workspace,
-                                        f'encoder_R{cfg.extra_downsample_ratio}_E{epoch+1}.pth'))
-        torch.save(ckpt_D, os.path.join(cfg.workspace,
-                                        f'decoder_R{cfg.extra_downsample_ratio}_E{epoch+1}.pth'))
 
-        with open(os.path.join(cfg.workspace, f'loss_record_epoch_{epoch+1}.txt'), 'w') as f:
-            for loss in loss_record:
-                f.write(f'{loss}\n')
+        if gpu == 0:
+            torch.save(ckpt_E, os.path.join(cfg.workspace,
+                                            f'encoder_R{cfg.extra_downsample_ratio}_E{epoch+1}.pth'))
+            torch.save(ckpt_D, os.path.join(cfg.workspace,
+                                            f'decoder_R{cfg.extra_downsample_ratio}_E{epoch+1}.pth'))
+
+            with open(os.path.join(cfg.workspace, f'loss_record_epoch_{epoch+1}.txt'), 'w') as f:
+                for loss in loss_record:
+                    f.write(f'{loss}\n')
+
         loss_record.clear()
 
 
