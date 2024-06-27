@@ -58,10 +58,10 @@ hdf5_file:  # set empty will not use hdf5
   linux: /home/tlzn/users/zlqiu/datas/zlqiu/Audio_MAE_Base_ST/as_pretrain.hdf5
 encoder_ckpt:
   win: workspace\2024-06-15_21-16-26\encoder_R1_E1.pth
-  linux: ckpt/pretrained/hts_at/HTSAT_ESC_exp=1_fold=1_acc=0.985.pth
+  linux: workspace/2024-06-26_04-24-58/encoder_R1_E1.pth
 decoder_ckpt:
   win: workspace\2024-06-15_21-16-26\decoder_R1_E1.pth
-  linux: ckpt/pretrained/hts_at/HTSAT_ESC_exp=1_fold=1_acc=0.985.pth
+  linux: workspace/2024-06-26_04-24-58/decoder_R1_E1.pth
 workspace:
   win: workspace
   linux: workspace

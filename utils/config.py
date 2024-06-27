@@ -71,6 +71,15 @@ class AMAEConfig:
             self.cfg_path = cfg_path
             self.parse_config()
 
+    def __repr__(self):
+        result = ''
+        result += f'{self.__class__.__name__}\n'
+        for k, v in self.__dict__.items():
+            result += f'{k}: {v}\n'
+
+        return result
+
+
     def parse_config(self):
         def _sys_compatible(config):
             sys_key = 'win' if platform.system() == 'Windows' else 'linux'

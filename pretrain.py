@@ -14,7 +14,7 @@ from utils import AMAEConfig
 from dataset import ASPretrain
 
 
-def prepare_environment(cfg):
+def prepare_environment(cfg: AMAEConfig):
     # paths
     assert cfg.workspace is not None, f'None workspace dir'
     time_str = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
@@ -33,8 +33,7 @@ def prepare_environment(cfg):
     )
 
     logger.info(f'########## train start at {time_str} ##########')
-    logger.info(f'config: {cfg.cfg_path}')
-    logger.info(f'workspace: {cfg.workspace}')
+    logger.info(f'config: {cfg}')
 
 
 def forward_loss(target, mask, pred, norm_pix_loss):
@@ -214,12 +213,12 @@ def train(cfg: AMAEConfig, ddp=False, amp=False, num_workers=1):
         sched_E.step()
         sched_D.step()
 
-        ckpt_E = {'parameter': model_E.state_dict(),
+        ckpt_E = {'parameter': model_E.module.state_dict() if ddp else model_E.state_dict(),
                   'optimizer': opt_E.state_dict(),
                   'scheduler': sched_E.state_dict(),
                   'epoch': epoch,
                   }
-        ckpt_D = {'parameter': model_D.state_dict(),
+        ckpt_D = {'parameter': model_D.module.state_dict() if ddp else model_D.state_dict(),
                   'optimizer': opt_D.state_dict(),
                   'scheduler': sched_D.state_dict(),
                   'epoch': epoch,
