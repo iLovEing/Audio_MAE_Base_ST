@@ -11,7 +11,7 @@ embed_dim: 96
 window_size: 8
 latent_channel: 512  # grid
 extra_downsample_ratio: 1  # for long audio
-num_classes: 0
+num_classes: 527
 absolute_position_embedding: False
 
 EC_mlp_ratio: 4
@@ -35,18 +35,21 @@ DC_patch_norm: True
 DC_qkv_bias: True
 
 # training config
-pre_training: True
-load_encoder: False
+pre_training: False
+load_encoder: True
 load_decoder: False
 roll_mag_aug: True
-mask_ratio: 0.6  # grid
+mask_ratio: 0  # grid
 norm_pix_loss: True  # grid
 restore_mask_only: True  # grid
-batch_size: 64
+batch_size: 128
 learning_rate: 0.001  # 1e-4 also workable
 max_epoch: 100
 lr_scheduler: [ 0.02, 0.05, 0.1 ]
-lr_scheduler_epoch: [ 4, 5, 6 ]
+lr_scheduler_epoch: [ 10, 20, 30 ]
+# finetune
+patience: 8
+from_pretrain: True  # only load state_dict, if False and load_encoder set true, will load optimizer... too
 
 # paths
 data_csv:

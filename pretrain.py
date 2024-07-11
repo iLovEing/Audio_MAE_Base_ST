@@ -136,7 +136,7 @@ def train(cfg: AMAEConfig, ddp=False, amp=False, num_workers=1):
     sched_E = torch.optim.lr_scheduler.LambdaLR(
         opt_E,
         lr_lambda=_lr_foo,
-        last_epoch=-1 if ckpt_E is None else ckpt_E['epoch'],  # todo
+        last_epoch=-1 if ckpt_E is None else ckpt_E['epoch'],
     )
     if ckpt_E is not None:
         opt_E.load_state_dict(ckpt_E['optimizer'])
@@ -207,24 +207,24 @@ def train(cfg: AMAEConfig, ddp=False, amp=False, num_workers=1):
                 progress_bar.set_postfix(loss=loss.item())
                 if step % 50 == 0:
                     logger.info(f'training loss {format(loss.item(), ".5f")} at step {step}')
-            loss_record.append(loss.item())
-            step += 1
+                loss_record.append(loss.item())
+                step += 1
 
         sched_E.step()
         sched_D.step()
 
-        ckpt_E = {'parameter': model_E.module.state_dict() if ddp else model_E.state_dict(),
-                  'optimizer': opt_E.state_dict(),
-                  'scheduler': sched_E.state_dict(),
-                  'epoch': epoch,
-                  }
-        ckpt_D = {'parameter': model_D.module.state_dict() if ddp else model_D.state_dict(),
-                  'optimizer': opt_D.state_dict(),
-                  'scheduler': sched_D.state_dict(),
-                  'epoch': epoch,
-                  }
+        if not ddp or gpu == 0:
+            ckpt_E = {'parameter': model_E.module.state_dict() if ddp else model_E.state_dict(),
+                      'optimizer': opt_E.state_dict(),
+                      'scheduler': sched_E.state_dict(),
+                      'epoch': epoch,
+                      }
+            ckpt_D = {'parameter': model_D.module.state_dict() if ddp else model_D.state_dict(),
+                      'optimizer': opt_D.state_dict(),
+                      'scheduler': sched_D.state_dict(),
+                      'epoch': epoch,
+                      }
 
-        if gpu == 0:
             torch.save(ckpt_E, os.path.join(cfg.workspace,
                                             f'encoder_R{cfg.extra_downsample_ratio}_E{epoch+1}.pth'))
             torch.save(ckpt_D, os.path.join(cfg.workspace,
@@ -234,7 +234,7 @@ def train(cfg: AMAEConfig, ddp=False, amp=False, num_workers=1):
                 for loss in loss_record:
                     f.write(f'{loss}\n')
 
-        loss_record.clear()
+            loss_record.clear()
 
 
 def main():

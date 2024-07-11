@@ -8,7 +8,7 @@ class AMAEConfig:
     # paths
     cfg_path: str = None
     data_csv: str = None
-    hdf5_file: str = None
+    hdf5_dir: str = None
     encoder_ckpt: str = None  # set None will not load checkpoint
     decoder_ckpt: str = None
     workspace: str = None
@@ -21,11 +21,11 @@ class AMAEConfig:
     mel_bins: int = 64
 
     # training config
-    h5df_write: bool = False
     pre_training: bool = True
     load_encoder: bool = False
     load_decoder: bool = False
     roll_mag_aug: bool = False
+
     mask_ratio: float = 0.
     norm_pix_loss: bool = True
     restore_mask_only: bool = True
@@ -34,6 +34,8 @@ class AMAEConfig:
     max_epoch: int = 200
     lr_scheduler: list = (0.02, 0.05, 0.1)
     lr_scheduler_epoch: list = (10, 20, 30)
+    patience: int = 5
+    from_pretrain: bool = True
 
     # model config
     extra_downsample_ratio: int = 1

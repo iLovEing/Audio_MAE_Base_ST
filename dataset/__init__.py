@@ -1,3 +1,4 @@
 from .pretrain_dataset import ASPretrain
-from .dataset_utils import generate_data_csv
+from .finetune_dataset import FinetuneAS2k
+from .dataset_utils import generate_data_csv, generate_hdf5
 
