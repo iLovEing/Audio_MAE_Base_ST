@@ -21,14 +21,12 @@ class AMAEConfig:
     mel_bins: int = 64
 
     # training config
-    pre_training: bool = True
     load_encoder: bool = False
     load_decoder: bool = False
     roll_mag_aug: bool = False
 
     mask_ratio: float = 0.
     norm_pix_loss: bool = True
-    restore_mask_only: bool = True
     batch_size: int = 128
     learning_rate: float = 0.001  # 1e-4 also workable
     max_epoch: int = 200

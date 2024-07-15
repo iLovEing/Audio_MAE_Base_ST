@@ -17,8 +17,8 @@ class ASPretrain(Dataset):
         assert 'type' in df.columns and 'file' in df.columns
         self.wav_files = list(df[df['type'] == 'train']['file'])
 
-        self.use_hdf5 = True if cfg.hdf5_file is not None else False
-        self.h5f_l = self.get_hdf5_handler(cfg.hdf5_file)
+        self.use_hdf5 = True if cfg.hdf5_dir is not None else False
+        self.h5f_l = self.get_hdf5_handler()
         self.h5f_idx_map = [round(i * len(self.wav_files) / 10) for i in range(1, 1+10)]
 
         self.use_roll = cfg.roll_mag_aug
@@ -29,14 +29,15 @@ class ASPretrain(Dataset):
         freq_ratio = cfg.spec_size // cfg.mel_bins
         self.target_frame = int(cfg.spec_size * freq_ratio * cfg.extra_downsample_ratio)
 
-    def get_hdf5_handler(self, base_name):
+    def get_hdf5_handler(self, h5_dir=None):
         if not self.use_hdf5:
             return []
 
+        base_name = r'as_pretrain.hdf5'
         suffix = base_name.split('.')[-1]
         prefix = base_name[:-len(suffix) - 1]
         hdf5_files = [prefix + f'_{i}.' + suffix for i in range(10)]
-        h5f_l = [h5py.File(_hdf5_f, mode='r', locking=False) for _hdf5_f in hdf5_files]
+        h5f_l = [h5py.File(os.path.join(h5_dir, _hdf5_f), mode='r', locking=False) for _hdf5_f in hdf5_files]
         return h5f_l
 
     def _pre_process(self, waveform):
@@ -60,7 +61,7 @@ class ASPretrain(Dataset):
     def __getitem__(self, idx):
         wav_f = self.wav_files[idx]
         wav_name = os.path.basename(wav_f)
-        if self.use_hdf5 is not None:
+        if self.use_hdf5:
             h5f = self.h5f_l[bisect.bisect_left(self.h5f_idx_map, idx)]
             if wav_name in h5f:
                 fbank = torch.tensor(h5f[wav_name][:])

@@ -24,8 +24,7 @@ class PatchEmbed(nn.Module):
     2D Image to Patch Embedding
     """
 
-    def __init__(self, img_size=256, patch_size=4, in_c=3, embed_dim=96, extra_ds_ratio=1,
-                 abslt_pos_ebd=False, norm_layer=nn.Identity()):
+    def __init__(self, patch_size=4, in_c=3, embed_dim=96, extra_ds_ratio=1, norm_layer=nn.Identity()):
         super().__init__()
         patch_size = (patch_size*extra_ds_ratio, patch_size)
         self.patch_size = patch_size
@@ -33,26 +32,9 @@ class PatchEmbed(nn.Module):
         self.embed_dim = embed_dim
         self.proj = nn.Conv2d(in_c, embed_dim, kernel_size=patch_size, stride=patch_size)
         self.norm = norm_layer(embed_dim)
-        self.ape = abslt_pos_ebd
-
-        # absolute position embedding
-        if self.ape:
-            num_patches = (img_size // patch_size[0]) ** 2
-            self.absolute_pos_embed = nn.Parameter(torch.zeros(in_c, num_patches, self.embed_dim))
-            trunc_normal_(self.absolute_pos_embed, std=.02)
 
     def forward(self, x):
         _, _, H, W = x.shape
-
-        # # padding
-        # # 如果输入图片的H，W不是patch_size的整数倍，需要进行padding
-        # pad_input = (H % self.patch_size[0] != 0) or (W % self.patch_size[1] != 0)
-        # if pad_input:
-        #     # to pad the last 3 dimensions,
-        #     # (W_left, W_right, H_top,H_bottom, C_front, C_back)
-        #     x = F.pad(x, (0, self.patch_size[1] - W % self.patch_size[1],
-        #                   0, self.patch_size[0] - H % self.patch_size[0],
-        #                   0, 0))
 
         # 下采样patch_size倍
         x = self.proj(x)
@@ -61,10 +43,6 @@ class PatchEmbed(nn.Module):
         # transpose: [B, C, HW] -> [B, HW, C]
         x = x.flatten(2).transpose(1, 2)
         x = self.norm(x)
-
-        if self.ape:
-            assert x.shape == self.absolute_pos_embed.shape, "if use ape, will not allow dynamic padding"
-            x = x + self.absolute_pos_embed
 
         return x, H, W
 

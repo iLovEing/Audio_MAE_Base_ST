@@ -12,7 +12,7 @@ window_size: 8
 latent_channel: 512  # grid
 extra_downsample_ratio: 1  # for long audio
 num_classes: 0
-absolute_position_embedding: False
+absolute_position_embedding: True  # grid
 
 EC_mlp_ratio: 4
 EC_num_head: [ 4, 8, 16, 32 ]
@@ -35,25 +35,23 @@ DC_patch_norm: True
 DC_qkv_bias: True
 
 # training config
-pre_training: True
 load_encoder: False
 load_decoder: False
 roll_mag_aug: True
 mask_ratio: 0.6  # grid
 norm_pix_loss: True  # grid
-restore_mask_only: True  # grid
 batch_size: 64
 learning_rate: 0.001  # 1e-4 also workable
-max_epoch: 100
+max_epoch: 50
 lr_scheduler: [ 0.02, 0.05, 0.1 ]
-lr_scheduler_epoch: [ 4, 5, 6 ]
+lr_scheduler_epoch: [ 10, 20, 30 ]
 
 # paths
 data_csv:
   win: manifest\ft_data.csv
   linux: /home/tlzn/users/zlqiu/datas/zlqiu/Audio_MAE_Base_ST/as_pretrain.csv
 hdf5_dir:  # set empty will not use hdf5
-  win: E:\common\dataset\audio\audio_set\h5
+  win:
   linux: /home/tlzn/users/zlqiu/datas/zlqiu/Audio_MAE_Base_ST/as_pretrain.hdf5
 encoder_ckpt:
   win: ckpt\encoder_R1_E8.pth

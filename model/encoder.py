@@ -14,7 +14,7 @@ from torchlibrosa.augmentation import SpecAugmentation
 
 from utils import AMAEConfig
 
-from .model_utils import init_weights, reshape_wav2img, reshape_img2wav
+from .model_utils import init_weights_xavier, reshape_wav2img, reshape_img2wav, get_2d_sincos_pos_embed
 from .st_layers import PatchMerging, BasicLayer, PatchEmbed
 
 
@@ -67,7 +67,7 @@ class STEncoder(nn.Module):
         self.patch_size = cfg.patch_size
         self.embed_dim = cfg.embed_dim
         self.window_size = cfg.window_size
-        self.abslt_pos_ebd = cfg.absolute_position_embedding
+        self.ape = cfg.absolute_position_embedding
         self.latent_ch = cfg.latent_channel
         self.mlp_ratio = cfg.EC_mlp_ratio
         self.depths = cfg.EC_depth
@@ -80,9 +80,7 @@ class STEncoder(nn.Module):
         self.patch_norm = cfg.EC_patch_norm
         self.num_layers = len(self.depths)
 
-        self.pre_training = cfg.pre_training
         self.mask_ratio = cfg.mask_ratio
-        self.restore_mask_only = cfg.restore_mask_only
 
         self.spec_augmenter = SpecAugmentation(time_drop_width=64, time_stripes_num=2,
                                                freq_drop_width=8, freq_stripes_num=2)  # 2 2
@@ -91,7 +89,7 @@ class STEncoder(nn.Module):
         # split image into non-overlapping patches
         self.patch_embed = PatchEmbed(
             patch_size=self.patch_size, in_c=in_chans, embed_dim=self.embed_dim, extra_ds_ratio=self.ds_ratio,
-            abslt_pos_ebd=self.abslt_pos_ebd, norm_layer=nn.LayerNorm if self.patch_norm else nn.Identity()
+            norm_layer=nn.LayerNorm if self.patch_norm else nn.Identity()
         )
         self.pos_drop = nn.Dropout(p=self.drop_rate)
 
@@ -136,7 +134,29 @@ class STEncoder(nn.Module):
             padding=(1, 0)
         ) if self.num_classes != 0 else nn.Identity()
 
-        self.apply(init_weights)
+        # mask token
+        self.mask_token = nn.Parameter(torch.zeros(1, 1, self.embed_dim))
+        torch.nn.init.normal_(self.mask_token, std=.02)
+
+        # absolute position embedding
+        if self.ape:
+            num_patches = (self.spec_size // self.patch_size) ** 2
+            self.pos_embed = nn.Parameter(torch.zeros(in_chans, num_patches, self.embed_dim), requires_grad=False)
+
+        self.initialize()
+
+    def initialize(self):
+        torch.nn.init.normal_(self.mask_token, std=.02)
+        num_patches = (self.spec_size // self.patch_size) ** 2
+        pos_embed = get_2d_sincos_pos_embed(self.pos_embed.shape[-1], int(num_patches ** .5))
+        self.pos_embed.data.copy_(torch.from_numpy(pos_embed).float().unsqueeze(0))
+
+        # initialize patch_embed like nn.Linear (instead of nn.Conv2d)
+        w = self.patch_embed.proj.weight.data
+        torch.nn.init.xavier_uniform_(w.view([w.shape[0], -1]))
+
+        # initialize nn.Linear and nn.LayerNorm
+        self.apply(init_weights_xavier)
 
     def standardization_audio(self, x):
         batch, channel, time, freq = x.shape
@@ -149,26 +169,23 @@ class STEncoder(nn.Module):
         return x
 
     def random_mask(self, x):
-        B, C, T, F = x.shape
-        L = T * F
-        x = x.reshape(B, C, -1)
-
+        B, L, C = x.shape  # batch, length, dim
         len_keep = int(L * (1 - self.mask_ratio))
-        noise = torch.rand(B, C, L, device=x.device)  # noise in [0, 1]
-        ids_shuffle = torch.argsort(noise, dim=2)  # ascend: small is keep, large is remove
-        ids_restore = torch.argsort(ids_shuffle, dim=2)
 
-        keep_mask = torch.zeros([B, C, L], device=x.device)
-        keep_mask[:, :, :len_keep] = 1
-        keep_mask = torch.gather(keep_mask, dim=2, index=ids_restore)
-        x_masked = torch.mul(x, keep_mask)
+        noise = torch.rand(B, L, device=x.device)  # noise in [0, 1]
 
-        remove_mask = torch.ones([B, C, L], device=x.device)
-        if self.restore_mask_only:
-            remove_mask[:, :, :len_keep] = 0
-            remove_mask = torch.gather(remove_mask, dim=2, index=ids_restore)
+        # sort noise for each sample
+        ids_shuffle = torch.argsort(noise, dim=1)  # ascend: small is keep, large is remove
+        ids_restore = torch.argsort(ids_shuffle, dim=1)
 
-        return x_masked.reshape(B, C, T, F), remove_mask.reshape(B, C, T, F)
+        # keep the first subset
+        ids_keep = ids_shuffle[:, :len_keep]
+        x_reserve = torch.gather(x, dim=1, index=ids_keep.unsqueeze(-1).repeat(1, 1, C))
+        mask_tokens = self.mask_token.repeat(B, ids_restore.shape[1] - x_reserve.shape[1], 1)
+        temp_x = torch.cat([x_reserve, mask_tokens], dim=1)
+        x_mask = torch.gather(temp_x, dim=1, index=ids_restore.unsqueeze(-1).repeat(1, 1, C))
+
+        return x_mask
 
     # input: [B, 1, T, mel_bin](e.g. [4, 1, 256, 256])
     def forward(self, x):
@@ -179,12 +196,8 @@ class STEncoder(nn.Module):
         x = self.bn0(x)
         x = x.transpose(1, 3)
 
-        mask = None
-        if self.training:
-            if self.pre_training:
-                x, mask = self.random_mask(x)
-            else:
-                x = self.spec_augmenter(x)
+        if self.training and self.mask_ratio == 0.:
+            x = self.spec_augmenter(x)
 
         # -> [B, C, img_H(f), img_W(T)](e.g. [4, 1, 256, 256])
         x = reshape_wav2img(x, self.freq_ratio)
@@ -192,6 +205,14 @@ class STEncoder(nn.Module):
         # [B, C, img_H, img_W](e.g. [4, 1, 256, 256]) -> [B, iH*iW(L), C'](e.g. [4, 4096, 96])
         x, H, W = self.patch_embed(x)
         x = self.pos_drop(x)
+
+        if self.training and self.mask_ratio > 0.:
+            x = self.random_mask(x)
+
+        # pos embedding
+        if self.ape:
+            assert x.shape[1:] == self.pos_embed.shape[1:], "pos_embed shape miss match"
+            x = x + self.pos_embed
 
         # [B, L, C] -> [B, L/4, 2C] -> [B, L/16, 4C] -> [B, L/64, 8C]
         # (e.g. [4, 4096, 96] -> [4, 1024, 192]) -> [4, 256, 384] -> [4, 64, 768]
@@ -216,6 +237,5 @@ class STEncoder(nn.Module):
             'feature': latent_feature,
             'classifier': classifier_output,
             'ori_fbank': ori_fbank,
-            'mask': mask,
         }
 

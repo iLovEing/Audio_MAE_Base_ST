@@ -52,7 +52,7 @@ def train(cfg: AMAEConfig, ddp=False, amp=False, num_workers=0):
                 lr_scale = cfg.lr_scheduler[lr_pos]
 
         if not ddp or gpu == 0:
-            logger.info(f'adjust lr scale {lr_scale} at epoch {_epoch+1}')
+            logger.info(f'adjust epoch {_epoch + 1} lr scale to {lr_scale}')
         return lr_scale
 
     # 1. prepare
@@ -93,10 +93,10 @@ def train(cfg: AMAEConfig, ddp=False, amp=False, num_workers=0):
             rank=rank
         )
         dataloader_train = DataLoader(dataset_train,
-                                batch_size=cfg.batch_size,
-                                shuffle=False,  # sampler will do shuffle
-                                sampler=sampler_train,
-                                num_workers=num_workers)
+                                      batch_size=cfg.batch_size,
+                                      shuffle=False,  # sampler will do shuffle
+                                      sampler=sampler_train,
+                                      num_workers=num_workers)
 
         sampler_eval = torch.utils.data.distributed.DistributedSampler(
             dataset_eval,
@@ -104,23 +104,24 @@ def train(cfg: AMAEConfig, ddp=False, amp=False, num_workers=0):
             rank=rank
         )
         dataloader_eval = DataLoader(dataset_eval,
-                                batch_size=cfg.batch_size,
-                                shuffle=False,  # sampler will do shuffle
-                                sampler=sampler_eval,
-                                num_workers=num_workers)
+                                     batch_size=cfg.batch_size,
+                                     shuffle=False,  # sampler will do shuffle
+                                     sampler=sampler_eval,
+                                     num_workers=num_workers)
     else:
         dataloader_train = DataLoader(dataset_train,
-                                batch_size=cfg.batch_size,
-                                shuffle=True,
-                                num_workers=num_workers)
+                                      batch_size=cfg.batch_size,
+                                      shuffle=True,
+                                      num_workers=num_workers)
         dataloader_eval = DataLoader(dataset_eval,
-                                batch_size=cfg.batch_size,
-                                shuffle=True,
-                                num_workers=num_workers)
+                                     batch_size=cfg.batch_size,
+                                     shuffle=True,
+                                     num_workers=num_workers)
 
     # 4. model & optimizer & loss
     model = STEncoder(cfg).to(device)
-    model.load_state_dict(ckpt['parameter'], strict=False if cfg.from_pretrain else True) if ckpt is not None else None
+    model.load_state_dict(ckpt['parameter'], strict=(False if cfg.from_pretrain else True)) \
+        if ckpt is not None else None
     if ddp:
         model = torch.nn.SyncBatchNorm.convert_sync_batchnorm(model)
         model = nn.parallel.DistributedDataParallel(model, device_ids=[gpu])
@@ -144,7 +145,7 @@ def train(cfg: AMAEConfig, ddp=False, amp=False, num_workers=0):
     criterion = nn.BCEWithLogitsLoss()
 
     step = 0
-    start_epoch = 0 if ckpt is None or cfg.from_pretrain else ckpt['epoch']+1
+    start_epoch = 0 if ckpt is None or cfg.from_pretrain else ckpt['epoch'] + 1
     loss_record = []
     best_map = 0
     patience_step = 0
@@ -219,7 +220,7 @@ def train(cfg: AMAEConfig, ddp=False, amp=False, num_workers=0):
 
                 ap = [stat['AP'] for stat in stats]
                 map = np.mean([stat['AP'] for stat in stats])
-                logger.info(f'eval mAP {format(map, ".6f")}, loss {format(loss, ".5f")} at epoch {epoch+1}')
+                logger.info(f'eval mAP {format(map, ".6f")}, loss {format(loss, ".5f")} at epoch {epoch + 1}')
                 if map > best_map:
                     patience_step = 0
                     best_map = map
@@ -233,13 +234,16 @@ def train(cfg: AMAEConfig, ddp=False, amp=False, num_workers=0):
                     logger.info(f'refresh best model at epoch {epoch + 1}')
                 else:
                     patience_step += 1
+                    logger.info(f'train with patience_step {patience_step}')
+
                 if epoch + 1 == cfg.max_epoch or patience_step == cfg.patience:
                     logger.info(f'stop training at epoch {epoch + 1}, patience_step {patience_step}')
-                    file_name = f'E_{epoch+1}_map_{format(best_map, ".6f")}_loss_{format(best_loss, ".5f")}'
+                    file_name = f'E_{epoch + 1}_map_{format(best_map, ".6f")}_loss_{format(best_loss, ".5f")}'
                     torch.save(best_ckpt, os.path.join(cfg.workspace, f"{file_name}.pth"))
                     with open(os.path.join(cfg.workspace, f"{file_name}_ap.txt"), 'w') as f:
                         for _ap in best_aps:
                             f.write(f'{format(_ap, ".6f")}\n')
+                    break
 
 
 def main():

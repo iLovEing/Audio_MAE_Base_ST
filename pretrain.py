@@ -174,14 +174,14 @@ def train(cfg: AMAEConfig, ddp=False, amp=False, num_workers=1):
             opt_E.zero_grad()
             opt_D.zero_grad()
 
-            batch = batch.cuda() if ddp else batch.to(device)
+            batch = batch.to(device)
             if amp:
                 with torch.cuda.amp.autocast():
                     encoder_output = model_E(batch)
                     decoder_output = model_D(encoder_output['latent'])
                     loss = forward_loss(
                         target=encoder_output['ori_fbank'],
-                        mask=encoder_output['mask'],
+                        mask=torch.ones_like(decoder_output),
                         pred=decoder_output,
                         norm_pix_loss=cfg.norm_pix_loss,
                     )
@@ -195,7 +195,7 @@ def train(cfg: AMAEConfig, ddp=False, amp=False, num_workers=1):
                 decoder_output = model_D(encoder_output['latent'])
                 loss = forward_loss(
                     target=encoder_output['ori_fbank'],
-                    mask=encoder_output['mask'],
+                    mask=torch.ones_like(decoder_output),
                     pred=decoder_output,
                     norm_pix_loss=cfg.norm_pix_loss,
                 )
@@ -207,8 +207,8 @@ def train(cfg: AMAEConfig, ddp=False, amp=False, num_workers=1):
                 progress_bar.set_postfix(loss=loss.item())
                 if step % 50 == 0:
                     logger.info(f'training loss {format(loss.item(), ".5f")} at step {step}')
-                loss_record.append(loss.item())
-                step += 1
+            loss_record.append(loss.item())
+            step += 1
 
         sched_E.step()
         sched_D.step()
@@ -234,7 +234,7 @@ def train(cfg: AMAEConfig, ddp=False, amp=False, num_workers=1):
                 for loss in loss_record:
                     f.write(f'{loss}\n')
 
-            loss_record.clear()
+        loss_record.clear()
 
 
 def main():
@@ -253,8 +253,15 @@ def main():
     train(cfg, ddp, amp, num_workers)
 
 
+def debug_main():
+    cfg = AMAEConfig(r'config\pretrain.yaml')
+    ddp = False
+    amp = True
+    train(cfg, ddp, amp)
+
+
 # ddp: torchrun --nnodes=1 --node_rank=0 --nproc_per_node=2 --master_addr="192.168.1.250" --master_port=23456 \
 # pretrain.py --cfg_path /home/tlzn/users/zlqiu/project/Audio_MAE_Base_ST/config/pretrain.yaml --amp --thread 10
 # normal: python pretrain.py --cfg_path /home/tlzn/users/zlqiu/project/Audio_MAE_Base_ST/config/pretrain.yaml
 if __name__ == '__main__':
-    main()
+    debug_main()

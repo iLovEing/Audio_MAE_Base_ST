@@ -35,7 +35,6 @@ DC_patch_norm: True
 DC_qkv_bias: True
 
 # training config
-pre_training: False
 load_encoder: True
 load_decoder: False
 roll_mag_aug: True

@@ -1,6 +1,6 @@
 import torch
 import torch.nn as nn
-from .model_utils import init_weights, reshape_wav2img, reshape_img2wav
+from .model_utils import reshape_wav2img, reshape_img2wav, init_weights_xavier
 from utils import AMAEConfig
 from .st_layers import BasicLayer, PatchSeparate, PatchEmbedInverse
 
@@ -61,7 +61,7 @@ class STDecoder(nn.Module):
             norm_layer=nn.LayerNorm if self.patch_norm else nn.Identity()
         )
 
-        self.apply(init_weights)
+        self.apply(init_weights_xavier)
 
     def forward(self, latent_wav):
         x = reshape_wav2img(latent_wav, self.freq_ratio)
